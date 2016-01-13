@@ -6,3 +6,11 @@ authors = ["Kristoffer Søholm <k.soeholm@gmail.com>"]
 [[bin]]
 name = "peek"
 path = "src/bin/peek.rs"
+
+[[bin]]
+name = "poke"
+path = "src/bin/poke.rs"
+
+[dependencies]
+mio = "0.5"
+bytes = "0.3.0"
