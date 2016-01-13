@@ -84,7 +84,7 @@ impl mio::Handler for Peek {
                                   .unwrap();
                     }
                     Ok(None) => {
-                        println!("the server socket wasn't actually ready");
+                        println!("the server socket wasn't actually ready lol");
                     }
                     Err(e) => {
                         println!("listener.accept() errored: {}", e);
@@ -103,8 +103,8 @@ fn main() {
     // Broadcast
     let mut udp = net2::UdpBuilder::new_v4().unwrap().bind("0.0.0.0:0").unwrap();
     udp.set_broadcast(true);
-    udp.send_to(b"POKE ME!31337", (Ipv4Addr::from(INADDR_BROADCAST),1337));
-
+    let msg = b"POKEME!\x39\x05";
+    udp.send_to(msg, (Ipv4Addr::from(INADDR_BROADCAST),1337));
 
     // Start event loop
     let address = "0.0.0.0:1337".parse().unwrap();

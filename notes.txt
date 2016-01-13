@@ -1,0 +1,13 @@
+peek:
+  broadcast udp: poke me! + port
+  listen for connection from servers
+  send commands to server
+
+poke:
+  listen for broadcast + port
+  connect to port
+  handle commands
+
+n = read(2)     (length)
+buf = read(n)   (data)
+decrypt(buf)
