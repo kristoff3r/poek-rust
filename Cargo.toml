@@ -12,8 +12,10 @@ name = "poke"
 path = "src/bin/poke.rs"
 
 [dependencies]
-mio = "0.5"
-bytes = "0.3.0"
+mio = "^0.5"
+bytes = "^0.3.0"
 rust-crypto = "^0.2"
 byteorder = "^0.4.2"
 rand = "^0.3.13"
+net2 = "^0.2.20"
+nix = "^0.4.2"

@@ -1,11 +1,15 @@
 extern crate mio;
 extern crate bytes;
+extern crate net2;
+extern crate nix;
 
 use std::io::Cursor;
 use mio::*;
 use mio::tcp::{TcpListener, TcpStream};
 use mio::util::Slab;
 use bytes::{Buf, Take};
+use net2::{UdpBuilder,UdpSocketExt};
+use nix::sys::socket::INADDR_BROADCAST;
 
 const SERVER: mio::Token = mio::Token(0);
 
@@ -96,8 +100,10 @@ impl mio::Handler for Peek {
 }
 
 fn main() {
-    // Broadcast our presence
-    //let mut socket = try!(UdpSocket::bind("127.0.0.1:34254"));
+    // Broadcast
+    let mut udp = net2::UdpBuilder::new_v4().unwrap().bind("0.0.0.0:0").unwrap();
+    udp.set_broadcast(true);
+    udp.send_to(b"POKE ME!31337", (Ipv4Addr::from(INADDR_BROADCAST),1337));
 
 
     // Start event loop
