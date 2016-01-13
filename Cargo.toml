@@ -1,0 +1,8 @@
+[package]
+name = "poek"
+version = "0.1.0"
+authors = ["Kristoffer Søholm <k.soeholm@gmail.com>"]
+
+[[bin]]
+name = "peek"
+path = "src/bin/peek.rs"
