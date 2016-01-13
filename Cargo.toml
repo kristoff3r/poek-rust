@@ -9,7 +9,7 @@ path = "src/bin/peek.rs"
 
 [[bin]]
 name = "poke"
-path = "src/bin/poke.rs"
+path = "src/poke.rs"
 
 [dependencies]
 mio = "^0.5"

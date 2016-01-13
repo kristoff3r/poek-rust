@@ -3,18 +3,17 @@ use crypto::chacha20poly1305::ChaCha20Poly1305;
 use crypto::curve25519::{curve25519_base, curve25519};
 use crypto::blake2b::Blake2b;
 use crypto::digest::Digest;
-use byteorder::{LittleEndian,WriteBytesExt,ReadBytesExt,Error};
-use std::io::{Read,Write};
+use byteorder::{LittleEndian,WriteBytesExt,ReadBytesExt};
+use std::io::Read;
 use std::io;
 use rand::os::OsRng;
 use rand::Rng;
 use bytes::{MutBuf,RingBuf};
 use byteorder;
-use std::mem::size_of;
 use std::result;
 
 const TAG_SIZE: usize = 16;
-const NONCE_SIZE: usize = 16;
+const NONCE_SIZE: usize = 8;
 const BOXKEY_SIZE: usize = 16;
 const PUBLIC_KEY_SIZE: usize = 32;
 const SECRET_KEY_SIZE: usize = 32;
@@ -63,7 +62,7 @@ impl BoxState {
     fn make_state(&mut self) -> ChaCha20Poly1305 {
         /* Create the additional data */
         let mut additional_data = [0; 8];
-        (&mut additional_data[0..]).write_u64::<LittleEndian>(self.pos);
+        (&mut additional_data[0..]).write_u64::<LittleEndian>(self.pos).unwrap();
 
         let res =
             ChaCha20Poly1305::new(&self.key,
@@ -92,7 +91,7 @@ pub struct CryptoStruct {
     buf: RingBuf,
 }
 
-pub enum CryptoState {
+enum CryptoState {
     PreHandshake([u8; SECRET_KEY_SIZE], [u8; PUBLIC_KEY_SIZE]),
     Ready(Encrypter, Decrypter)
 }
@@ -114,15 +113,16 @@ impl CryptoStream for CryptoStruct {
 
     fn encrypt<F>(&mut self, data: &[u8], send_to_world: &mut F)
         where F : FnMut(&[u8]) {
-        if let &mut Ready(ref mut encrypter, ref mut decrypter) = &mut self.state {
-            assert!(data.len() <= 0x10000);
-            let mut outbuf = [0; 0x10000 + TAG_SIZE];
-            let mut outbuf = &mut outbuf[0..data.len() + TAG_SIZE];
+        if let &mut Ready(ref mut encrypter, _) = &mut self.state {
+            assert!(data.len() < 0x10000);
+            let mut outbuf = [0; 2 + 0x10000 + TAG_SIZE];
+            (&mut outbuf[0..2]).write_u16::<LittleEndian>(data.len() as u16).unwrap();
+
             {
-                let (outmsg, tag) = outbuf.split_at_mut(data.len());
+                let (outmsg, tag) = (&mut outbuf[2..2 + data.len() + TAG_SIZE]).split_at_mut(data.len());
                 encrypter.encrypt(data, outmsg, tag);
             }
-            send_to_world(outbuf);
+            send_to_world(&outbuf[..2 + data.len() + TAG_SIZE]);
         } else {
             panic!("encrypt should not be called before handshake is done.");
         }
@@ -156,13 +156,13 @@ impl CryptoStream for CryptoStruct {
 
 struct EmptyError;
 impl From<byteorder::Error> for EmptyError {
-    fn from(err: byteorder::Error) -> EmptyError {
+    fn from(_: byteorder::Error) -> EmptyError {
         EmptyError
     }
 }
 
 impl From<io::Error> for EmptyError {
-    fn from(err: io::Error) -> EmptyError {
+    fn from(_: io::Error) -> EmptyError {
         EmptyError
     }
 }
@@ -218,14 +218,14 @@ impl CryptoStruct {
         let mut inbuf = [0; 0x10000];
         let mut inbuf = &mut inbuf[0..size];
         let mut outbuf = [0; 0x10000];
-        let mut outbuf = &mut outbuf[0..size];
+        let outbuf = &mut outbuf[0..size];
         let mut tag = [0; TAG_SIZE];
 
         try!(self.buf.read_exact(inbuf));
         try!(self.buf.read_exact(&mut tag));
 
-        if let &mut Ready(ref mut encrypter, ref mut decrypter) = &mut self.state {
-            assert!(decrypter.decrypt(outbuf, inbuf, &tag) == true);
+        if let &mut Ready(_, ref mut decrypter) = &mut self.state {
+            assert!(decrypter.decrypt(inbuf, outbuf, &tag) == true);
             recv_to_local_process(outbuf);
         } else {
             panic!("handle_packet should not be called after handshake is done.");

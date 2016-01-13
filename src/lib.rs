@@ -1,5 +1,3 @@
-#![feature(read_exact)]
-
 extern crate crypto;
 extern crate byteorder;
 extern crate rand;
