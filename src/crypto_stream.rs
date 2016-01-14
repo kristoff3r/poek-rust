@@ -22,6 +22,8 @@ pub trait CryptoStream {
     fn new<F>(send_to_world: &mut F) -> Self
         where F : FnMut(&[u8]);
 
+    fn ready_to_encrypt(&self) -> bool;
+
     fn encrypt<F>(&mut self, data: &[u8], send_to_world: &mut F)
         where F : FnMut(&[u8]);
 
@@ -107,7 +109,14 @@ impl CryptoStream for CryptoStruct {
         send_to_world(&public_key);
         CryptoStruct {
             state: PreHandshake(secret_key, public_key),
-            buf: RingBuf::new(0x10000 + 2 + TAG_SIZE)
+            buf: RingBuf::new(0x20000)
+        }
+    }
+
+    fn ready_to_encrypt(&self) -> bool {
+        match self.state {
+            PreHandshake(..) => false,
+            Ready(..) => true
         }
     }
 
@@ -139,7 +148,7 @@ impl CryptoStream for CryptoStruct {
             // Handled packets until error
             loop {
                 self.buf.mark();
-                let res = if self.handshake_done() {
+                let res = if self.ready_to_encrypt() {
                     self.handle_packet(recv_to_local_process)
                 } else {
                     self.handle_handshake()
@@ -170,13 +179,6 @@ impl From<io::Error> for EmptyError {
 type Result<T> = result::Result<T, EmptyError>;
 
 impl CryptoStruct {
-    fn handshake_done(&self) -> bool {
-        match self.state {
-            PreHandshake(..) => false,
-            Ready(..) => true
-        }
-    }
-
     fn handle_handshake(&mut self) -> Result<()> {
         let mut their_public_key = [0; PUBLIC_KEY_SIZE];
         try!(self.buf.read_exact(&mut their_public_key));
@@ -215,18 +217,15 @@ impl CryptoStruct {
 
         let size = try!(self.buf.read_u16::<LittleEndian>()) as usize;
 
-        let mut inbuf = [0; 0x10000];
-        let mut inbuf = &mut inbuf[0..size];
+        let mut inbuf = [0; 0x10000 + TAG_SIZE];
         let mut outbuf = [0; 0x10000];
-        let outbuf = &mut outbuf[0..size];
-        let mut tag = [0; TAG_SIZE];
 
-        try!(self.buf.read_exact(inbuf));
-        try!(self.buf.read_exact(&mut tag));
+        try!(self.buf.read_exact(&mut inbuf[..size + TAG_SIZE]));
+        let (inbuf, tag) = inbuf[..size + TAG_SIZE].split_at(size);
 
         if let &mut Ready(_, ref mut decrypter) = &mut self.state {
-            assert!(decrypter.decrypt(inbuf, outbuf, &tag) == true);
-            recv_to_local_process(outbuf);
+            assert!(decrypter.decrypt(inbuf, &mut outbuf[..size], &tag) == true);
+            recv_to_local_process(&outbuf[..size]);
         } else {
             panic!("handle_packet should not be called after handshake is done.");
         }
