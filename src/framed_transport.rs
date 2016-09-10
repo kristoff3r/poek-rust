@@ -20,17 +20,13 @@ impl Parse for Parser {
         }
 
         // If our buffer contains a newline...
-        if let Some(n) = buf.bytes().unwrap().iter().position(|b| *b == b'\n') {
+        if buf.len() >= 100 {
             // remove this line and the newline from the buffer.
-            let line = buf.shift(n);
-            buf.shift(1); // Also remove the '\n'.
+            let n = 100;
+            let buf_ = buf.shift(n);
 
             // Turn this data into a UTF string and return it in a Frame.
-            return match str::from_utf8(line.buf().bytes()) {
-                Ok(s) => Some(pipeline::Frame::Message(s.to_string())),
-                Err(_) => Some(pipeline::Frame::Error(
-                        io::Error::new(io::ErrorKind::Other, "invalid string"))),
-            }
+            return Some(pipeline::Frame::Message(buf_.buf().bytes().into()));
         }
         None
     }
@@ -45,9 +41,8 @@ impl Serialize for Serializer {
         use proto::pipeline::Frame::*;
 
         match frame {
-            Message(text) => {
-                buf.write_slice(&text.as_bytes());
-                buf.write_slice(&['\n' as u8]);
+            Message(vec) => {
+                buf.write_slice(&vec);
             }
             Error(e) => {
                 let _ = write!(bytes::Fmt(buf), "[ERROR] {}\n", e);

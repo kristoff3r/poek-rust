@@ -9,7 +9,7 @@ use new_line_transport;
 
 /// We want to encapsulate `pipeline::Message`. Since the line protocol does
 /// not have any streaming bodies, we can make the service be a request &
-/// response of type String. `LineService` takes the service supplied to
+/// response of type Vec<u8>. `LineService` takes the service supplied to
 /// `serve` and adapts it to work with the `proto::pipeline::Server`
 /// requirements.
 struct LineService<T> {
@@ -17,11 +17,11 @@ struct LineService<T> {
 }
 
 impl<T> Service for LineService<T>
-    where T: Service<Request = String, Response = String, Error = io::Error>,
+    where T: Service<Request = Vec<u8>, Response = Vec<u8>, Error = io::Error>,
           T::Future: 'static,
 {
-    type Request = String;
-    type Response = pipeline::Message<String, Empty<(), io::Error>>;
+    type Request = Vec<u8>;
+    type Response = pipeline::Message<Vec<u8>, Empty<(), io::Error>>;
     type Error = io::Error;
 
     // To make things easier, we are just going to box the future here, however
@@ -29,7 +29,7 @@ impl<T> Service for LineService<T>
     // directly.
     type Future = Box<Future<Item = Self::Response, Error = io::Error>>;
 
-    fn call(&self, req: String) -> Self::Future {
+    fn call(&self, req: Vec<u8>) -> Self::Future {
         Box::new(self.inner.call(req)
             .map(pipeline::Message::WithoutBody))
     }
@@ -43,7 +43,7 @@ impl<T> Service for LineService<T>
 /// new 'Service' for each connection that we receive.
 pub fn serve<T>(handle: &Handle,  addr: SocketAddr, new_service: T)
                 -> io::Result<()>
-    where T: NewService<Request = String, Response = String, Error = io::Error> + Send + 'static,
+    where T: NewService<Request = Vec<u8>, Response = Vec<u8>, Error = io::Error> + Send + 'static,
 {
     try!(server::listen(handle, addr, move |stream| {
         // Initialize the pipeline dispatch with the service and the line

@@ -36,7 +36,7 @@ pub fn new_line_transport<T>(inner: T) -> LowLevelLineTransport<T>
 /// are mostly the same (Strings with io::Error as failures), however they
 /// could also be different (for example HttpRequest for In and HttpResponse
 /// for Out).
-pub type Frame = pipeline::Frame<String, (), io::Error>;
+pub type Frame = pipeline::Frame<Vec<u8>, (), io::Error>;
 
 /// This is a bare-metal implementation of a Transport. We define our frames to be String when
 /// reading from the wire, that is 'In' and also String when writing to the wire.
@@ -58,29 +58,19 @@ impl<T> FramedIo for LowLevelLineTransport<T>
             // have one new Frame for the Service to consume. We remove the line from the input
             // buffer and this function will get called by Tokio soon again to see if there are
             // more frames available.
-            if let Some(n) = self.read_buffer.iter().position(|b| *b == b'\n') {
-                let tail = self.read_buffer.split_off(n+1);
-                let mut line = mem::replace(&mut self.read_buffer, tail);
+            if self.read_buffer.len() >= 100 {
+                let n = 100;
+                let tail = self.read_buffer.split_off(n);
+                let mut buf = mem::replace(&mut self.read_buffer, tail);
 
                 // Remove the new line
-                line.truncate(n);
+                buf.truncate(n);
 
-                return String::from_utf8(line)
-                    // For pipelined protocols, the message must be a tuple
-                    // of the message payload to be sent to the Service and
-                    // Option<Sender<T>> where T is the body chunk type.
-                    //
-                    // To support streaming bodies, the transport could create
-                    // a channel pair, include the receiving end in the message
-                    // payload and provide the sending end to the pipeline
-                    // protocol dispatcher which will then proxy any body chunk
-                    // frame to the Sender.
-                    .map(|s| Async::Ready(pipeline::Frame::Message(s)))
-                    .map_err(|_| io::Error::new(io::ErrorKind::Other, "invalid string"));
+                return Ok(Async::Ready(pipeline::Frame::Message(buf)));
             }
 
             // There was no full line in the input buffer - let's see if anything is on our
-            // 'inner'. 
+            // 'inner'.
             match self.inner.read_to_end(&mut self.read_buffer) {
                 Ok(0) => {
                     // The other side hang up - this transport is all done.
@@ -137,8 +127,7 @@ impl<T> FramedIo for LowLevelLineTransport<T>
                     return Err(io::Error::new(io::ErrorKind::Other, "transport has pending writes"));
                 }
 
-                let mut bytes = req.into_bytes();
-                bytes.push(b'\n');
+                let mut bytes = req;
 
                 self.write_buffer = io::Cursor::new(bytes);
                 self.flush()

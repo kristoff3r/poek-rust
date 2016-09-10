@@ -11,17 +11,17 @@ use std::cell::RefCell;
 
 /// And the client handle.
 pub struct Client {
-    inner: pipeline::Client<String, String, Empty<(), io::Error>, io::Error>,
+    inner: pipeline::Client<Vec<u8>, Vec<u8>, Empty<(), io::Error>, io::Error>,
 }
 
 impl Service for Client {
-    type Request = String;
-    type Response = String;
+    type Request = Vec<u8>;
+    type Response = Vec<u8>;
     type Error = io::Error;
     // Again for simplicity, we are just going to box a future
     type Future = Box<Future<Item = Self::Response, Error = io::Error>>;
 
-    fn call(&self, req: String) -> Self::Future {
+    fn call(&self, req: Vec<u8>) -> Self::Future {
         self.inner.call(pipeline::Message::WithoutBody(req))
             .boxed()
     }
